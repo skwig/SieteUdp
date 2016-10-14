@@ -2,8 +2,11 @@ package sk.brecka;
 
 import sk.brecka.model.Packet;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.MalformedInputException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -21,6 +24,7 @@ public class PacketFactory {
         } else {
 
             List<Packet> packets = new ArrayList<>();
+            packets.add(PacketFactory.createTransferStartPacket(Packet.FRAGMENTED_MESSAGE, message.getBytes().length));
             for (int i = 0; i < message.length() / packetLength + 1; i++) {
                 // urci dlzku packetu
                 int length;
@@ -42,14 +46,100 @@ public class PacketFactory {
         }
     }
 
+    public static List<Packet> createFilePackets(Path path, int packetLength) throws IOException {
+        byte[] fileBytes = Files.readAllBytes(path);
+        byte[] filenameBytes = path.getFileName().toString().getBytes();
+
+        byte[] joined = ByteBuffer.allocate(fileBytes.length + filenameBytes.length + 4)
+                .putInt(filenameBytes.length)
+                .put(filenameBytes)
+                .put(fileBytes)
+                .array();
+
+
+        List<Packet> packets = new ArrayList<>();
+
+        packets.add(PacketFactory.createTransferStartPacket(Packet.FILE, joined.length));
+        for (int i = 0; i < joined.length / packetLength + 1; i++) {
+            // urci dlzku packetu
+            int length;
+            if ((i + 1) * packetLength < joined.length) {
+                length = packetLength;
+            } else {
+                length = joined.length - i * packetLength;
+            }
+            byte[] byteFragment = Arrays.copyOfRange(joined, i * packetLength, i * packetLength + length);
+            Packet packet = new Packet();
+            packet.setId(generatePacketId());
+            packet.setType(Packet.FILE);
+            packet.setData(byteFragment);
+
+            packets.add(packet);
+        }
+        return packets;
+    }
+
+
+//        for (int i = 0; i < (fileBytes.length + filenameBytes.length) / packetLength + 1; i++) {
+//            // urci dlzku packetu
+//            int length;
+//            if ((i + 1) * packetLength < fileBytes.length) {
+//                length = packetLength;
+//            } else {
+//                length = fileBytes.length - i * packetLength;
+//            }
+//            byte[] byteFragment = Arrays.copyOfRange(fileBytes, i * packetLength, i * packetLength + length);
+//            Packet packet = new Packet();
+//            packet.setId(generatePacketId());
+//            packet.setType(Packet.FILE);
+//            packet.setData(byteFragment);
+//
+//            packets.add(packet);
+//        }
+//        return packets;
+//}
+
     public static Packet createMessagePacket(String message) {
-        return new Packet(generatePacketId(),Packet.UNFRAGMENTED_MESSAGE,message.getBytes());
+        return new Packet(generatePacketId(), Packet.UNFRAGMENTED_MESSAGE, message.getBytes());
+    }
+
+    public static Packet createTransferStartPacket(byte messageType, int messageByteLength) {
+        byte[] data = ByteBuffer.allocate(Packet.ID_LENGTH + Packet.TYPE_LENGTH)
+                .put(messageType)
+                .putInt(messageByteLength)
+                .array();
+        return new Packet(generatePacketId(), Packet.TRANSFER_START, data);
+    }
+
+    public static Packet createServerBusyPacket() {
+        return new Packet(generatePacketId(), Packet.CONNECTION_RESPONSE_BUSY, new byte[0]);
+    }
+
+    public static Packet createServerAcceptedPacket(){
+        return new Packet(generatePacketId(), Packet.CONNECTION_RESPONSE_ACCEPTED, new byte[0]);
+    }
+
+    public static Packet createClientConnectPacket(){
+        return new Packet(generatePacketId(),Packet.CONNECTION_START,new byte[0]);
+    }
+
+//    public static Packet createFileTransferStartPacket(byte messageType, int messageByteLength) {
+//        byte[] data = ByteBuffer.allocate(Packet.ID_LENGTH + Packet.TYPE_LENGTH)
+//                .put(messageType)
+//                .putInt(messageByteLength)
+//                .array();
+//        return new Packet(generatePacketId(), Packet.TRANSFER_FILE_START, data);
+//    }
+
+    public static Packet createClientAcknowledgedConnection(){
+        return new Packet(generatePacketId(),Packet.CONNECTION_ACKNOWLEDGE_RESPONSE,new byte[0]);
     }
 
     public static Packet createPositiveResponsePacket(int id) {
         return new Packet(generatePacketId(), Packet.RESPONSE_POSITIVE, ByteBuffer.allocate(Packet.ID_LENGTH).putInt(id).array());
     }
 
+    @Deprecated
     public static byte[] packetToBytes(Packet packet) {
         //
         byte[] data = ByteBuffer.allocate(packet.getCrclessSize())
@@ -69,13 +159,14 @@ public class PacketFactory {
                 .array();
     }
 
+    @Deprecated
     public static Packet bytesToPacket(byte[] bytes) throws MalformedInputException {
         // 8 = pocet bytov pre long
         ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
         long packetCrc = byteBuffer.getLong();
         CRC32 crc32 = new CRC32();
-        crc32.update(bytes, 8, bytes.length - 8);
-        System.out.println("receivedCrc: " + packetCrc +", realCrc: " + crc32.getValue());
+        crc32.update(bytes, Packet.CRC_LENGTH, bytes.length - Packet.CRC_LENGTH);
+//        System.out.println("receivedCrc: " + packetCrc + ", realCrc: " + crc32.getValue());
         if (packetCrc == crc32.getValue()) {
             Packet packet = new Packet();
 
@@ -90,7 +181,7 @@ public class PacketFactory {
             byteBuffer.get(data);
             packet.setData(data);
 
-            System.out.println(new String(packet.getData()));
+//            System.out.println(new String(packet.getData()));
             return packet;
         } else {
             throw new MalformedInputException(0);
