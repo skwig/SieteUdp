@@ -144,6 +144,14 @@ public class PacketStorage {
         }
     };
 
+    public boolean contains(int id) {
+        for (Packet p : packetList) {
+            if (p.getId() == id) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     public boolean isListening() {
         return isListening;

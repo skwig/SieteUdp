@@ -28,23 +28,28 @@ public class Packet {
     public static final byte DISCOVER_HOSTS_REQUEST = 0x0D;
     public static final byte DISCOVER_HOSTS_RESPONSE = 0x0E;
 
-    public static final int CRC_LENGTH = 8;
-    public static final int TYPE_LENGTH = 1;
-    public static final int ID_LENGTH = 4;
+
+    public static final int CRC_LENGTH = Long.BYTES;
+    public static final int TYPE_LENGTH = Byte.BYTES;
+    public static final int ID_LENGTH = Integer.BYTES;
 
     byte type;
     int id;
     byte[] data;
 
+    boolean isAcknowledged;
+
     public Packet(int id, byte type, byte[] data) {
         this.id = id;
         this.type = type;
         this.data = data;
+        this.isAcknowledged = false;
     }
 
 
     public Packet() {
     }
+
 
     public static Packet fromBytes(byte[] bytes) throws MalformedInputException {
         // 8 = pocet bytov pre long
@@ -93,6 +98,14 @@ public class Packet {
                 .array();
     }
 
+
+    public boolean isAcknowledged() {
+        return isAcknowledged;
+    }
+
+    public void setAcknowledged(boolean acknowledged) {
+        isAcknowledged = acknowledged;
+    }
 
     public byte getType() {
         return type;

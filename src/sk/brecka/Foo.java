@@ -1,5 +1,6 @@
 package sk.brecka;
 
+import sk.brecka.thread.FileTransferThread;
 import sk.brecka.thread.ReceivingThread;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ public class Foo {
     InetAddress currentConnection;
 
     ReceivingThread receivingThread;
+    FileTransferThread fileTransferThread;
 
     public Foo(int receivingPort) throws IOException {
         this.receivingPort = receivingPort;
@@ -54,5 +56,13 @@ public class Foo {
 
     public void setCurrentConnection(InetAddress currentConnection) {
         this.currentConnection = currentConnection;
+    }
+
+    public FileTransferThread getFileTransferThread() {
+        return fileTransferThread;
+    }
+
+    public void setFileTransferThread(FileTransferThread fileTransferThread) {
+        this.fileTransferThread = fileTransferThread;
     }
 }

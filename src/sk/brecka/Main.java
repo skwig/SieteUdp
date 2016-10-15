@@ -1,6 +1,7 @@
 package sk.brecka;
 
 import sk.brecka.model.Packet;
+import sk.brecka.thread.FileTransferThread;
 import sk.brecka.thread.ReceivingThread;
 
 import java.io.*;
@@ -9,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.MalformedInputException;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Matcher;
@@ -241,7 +243,7 @@ public class Main {
 //        if (isStartingAsClient) {
         DatagramSocket socket = foo.getSocket();
 
-        byte[] buf = new byte[2048];
+        byte[] buf;
 
         int packetLength = 2000;
         System.out.println("Send message:");
@@ -265,11 +267,13 @@ public class Main {
                     }
                     break;
                 case "F":
-                    List<Packet> filePackets = PacketFactory.createFilePackets(Paths.get(input[1]), 200);
-                    for (Packet p : filePackets) {
-                        buf = p.toBytes();
-                        socket.send(new DatagramPacket(buf, buf.length, foo.getCurrentConnection(), foo.getSendingPort()));
-                    }
+                    List<Packet> filePackets = PacketFactory.createFilePackets(Paths.get(input[1]), 65490);
+                    Packet transferPacket = filePackets.get(0);
+                    filePackets.remove(0);
+
+                    buf = transferPacket.toBytes();
+                    foo.setFileTransferThread(new FileTransferThread(foo, transferPacket.getId(), filePackets));
+                    socket.send(new DatagramPacket(buf, buf.length, foo.getCurrentConnection(), foo.getSendingPort()));
                     break;
                 case "H":
                     buf = PacketFactory.createFindHostsRequestPacket().toBytes();
@@ -296,10 +300,20 @@ public class Main {
                     System.exit(0);
                     break;
                 case "I":
+                    // trosku dojebane, nenajde vzdy ethernetovu siet
                     System.out.println("Your IP address is " + InetAddress.getLocalHost().getHostAddress());
+//                    System.out.println(InetAddress.getLocalHost().getCanonicalHostName());
+//                    System.out.println(InetAddress.getLocalHost().getAddress());
+//                    System.out.println(InetAddress.getLocalHost().getHostName());
                     break;
                 default:
-                    System.out.println("Incorrect input. C to connect, M to message, F to file, H to discover hosts, Q to quit");
+                    System.out.println("Incorrect input.\n" +
+                            "C <ip> <port> to connect,\n" +
+                            "M <message> to message,\n" +
+                            "F <path> to sned a file,\n" +
+                            "H <subnet> <port> to discover hosts,\n" +
+                            "HL <port> to discover hosts on your local network,\n" +
+                            "Q to quit");
                     break;
             }
         }
@@ -358,7 +372,7 @@ public class Main {
         initFoo(Integer.parseInt(scannedLine), 0);
 
 //        boolean[] booleans = {true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false};
-//boolean[] booleans = {false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true};
+//boolean[] booleans = {false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,true,true,true,true,true};
 //
 //        byte[] bytes = PacketStorage.booleanArrayToByteArray(booleans);
 //
@@ -366,12 +380,21 @@ public class Main {
 //
 //            System.out.print(Integer.toBinaryString(b & 0xFF) + " ");
 //        }
-
-//        receivingThread.
-//        int length = 100;
-//        List<Packet> packets = PacketFactory.createMessagePackets("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.", length);
-//        for (Packet p : packets) {
-//            PacketFactory.bytesToPacket(PacketFactory.packetToBytes(p));
+//
+//        BitSet bitSet = new BitSet(16);
+//
+//        bitSet.set(0, true);
+//        bitSet.set(1, true);
+//        bitSet.set(2, true);
+//        bitSet.set(3, true);
+//        bitSet.set(5, true);
+//        bitSet.set(9, true);
+//        bitSet.set(10, true);
+//
+//        System.out.println(bitSet.toString());
+//
+//        for (byte b : bitSet.toByteArray()) {
+//            System.out.print(b + " ");
 //        }
 
     }

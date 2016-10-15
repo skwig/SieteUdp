@@ -35,7 +35,7 @@ public class ReceivingThread extends Thread {
     }
 
     private void init() throws IOException {
-        byteArray = new byte[2048];
+        byteArray = new byte[65536];
         receivedDatagramPacket = new DatagramPacket(byteArray, byteArray.length);
         hasConnection = false;
         packetStorage = null;
@@ -75,6 +75,12 @@ public class ReceivingThread extends Thread {
                     break;
             }
         }
+    }
+
+    private void sendAck(Packet p) throws IOException {
+        byte[] buf = PacketFactory.createPositiveResponsePacket(p.getId()).toBytes();
+        parent.getSocket().send(new DatagramPacket(buf, buf.length, parent.getCurrentConnection(), parent.getSendingPort()));
+//        System.out.println("Sending ack");
     }
 
     private void doThread() throws IOException {
@@ -147,16 +153,32 @@ public class ReceivingThread extends Thread {
                         ByteBuffer byteBuffer = ByteBuffer.wrap(receivedPacket.getData());
                         byte type = byteBuffer.get();
                         packetStorage = new PacketStorage(receivedPacket.getId(), type, byteBuffer.getInt());
+
+                        sendAck(receivedPacket);
                         System.out.println("Transfer started, type: " + type);
                         break;
                     case Packet.FILE:
                         if (packetStorage.isListening()) {
                             try {
-                                packetStorage.addPacket(receivedPacket);
-                                this.notifyPacketStorage();
+//                                sent = PacketFactory.createPositiveResponsePacket(receivedPacket.getId()).toBytes();
+                                if (!packetStorage.contains(receivedPacket.getId())) {
+                                    packetStorage.addPacket(receivedPacket);
+                                    this.notifyPacketStorage();
+//                                parent.getSocket().send(new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort()));
+                                }
                             } catch (PacketStorage.NotOperatingException | PacketStorage.IncorrectTypeException e) {
                                 e.printStackTrace();
                             }
+                        }
+                        sendAck(receivedPacket);
+                        break;
+                    case Packet.RESPONSE_POSITIVE:
+//                        System.out.println("Got positive response");
+                        int id = ByteBuffer.wrap(receivedPacket.getData()).getInt();
+                        if (parent.getFileTransferThread().getTransferId() == id) {
+                            parent.getFileTransferThread().start();
+                        } else {
+                            parent.getFileTransferThread().notifyAcknowledge(id);
                         }
                         break;
 

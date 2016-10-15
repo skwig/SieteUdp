@@ -86,7 +86,7 @@ public class PacketFactory {
         return new Packet(generatePacketId(), Packet.DISCOVER_HOSTS_RESPONSE, new byte[0]);
     }
 
-    public static Packet createMessagePacket(String message) {ł
+    public static Packet createMessagePacket(String message) {
         return new Packet(generatePacketId(), Packet.UNFRAGMENTED_MESSAGE, message.getBytes());
     }
 
