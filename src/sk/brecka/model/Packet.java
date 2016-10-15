@@ -25,6 +25,9 @@ public class Packet {
     public static final byte CONNECTION_RESPONSE_ACCEPTED = 0x0B;
     public static final byte CONNECTION_ACKNOWLEDGE_RESPONSE = 0x0C;
 
+    public static final byte DISCOVER_HOSTS_REQUEST = 0x0D;
+    public static final byte DISCOVER_HOSTS_RESPONSE = 0x0E;
+
     public static final int CRC_LENGTH = 8;
     public static final int TYPE_LENGTH = 1;
     public static final int ID_LENGTH = 4;

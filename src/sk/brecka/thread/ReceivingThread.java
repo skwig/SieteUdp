@@ -8,6 +8,7 @@ import sk.brecka.model.Packet;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
 import java.nio.charset.MalformedInputException;
 import java.util.Arrays;
 
@@ -63,30 +64,53 @@ public class ReceivingThread extends Thread {
         hasConnection = false;
     }
 
+    private void notifyPacketStorage() throws IOException {
+        if (packetStorage != null && packetStorage.isListening() && packetStorage.isFull()) {
+            switch (packetStorage.getListenedForType()) {
+                case Packet.FILE:
+                    packetStorage.buildFile();
+                    break;
+                case Packet.FRAGMENTED_MESSAGE:
+                    System.out.println((packetStorage.buildMessage()));
+                    break;
+            }
+        }
+    }
+
     private void doThread() throws IOException {
         try {
             parent.getSocket().receive(receivedDatagramPacket);
             retryCount = 0;
-            if (parent.getSocket().getSoTimeout() == 0) {
-                parent.getSocket().setSoTimeout(TIMEOUT_PERIOD);
-            }
+//            if (parent.getSocket().getSoTimeout() == 0) {
+//                parent.getSocket().setSoTimeout(TIMEOUT_PERIOD);
+//            }
 
             Packet receivedPacket;
             Packet sentPacket;
-
+//            System.out.println("received from " + receivedDatagramPacket.getAddress() + ":" + receivedDatagramPacket.getPort());
             receivedPacket = Packet.fromBytes(Arrays.copyOfRange(receivedDatagramPacket.getData(), 0, receivedDatagramPacket.getLength()));
-
+            byte[] sent;
             // nezavisle od existencie pripojenia
             switch (receivedPacket.getType()) {
                 case Packet.CONNECTION_RESPONSE_ACCEPTED:
-                    byte[] sent = PacketFactory.createClientAcknowledgedConnection().toBytes();
-                    sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), parent.getSendingPort());
+                    sent = PacketFactory.createClientAcknowledgedConnection().toBytes();
+                    sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
                     parent.getSocket().send(sentDatagramPacket);
                     hasConnection = true;
+                    parent.setCurrentConnection(receivedDatagramPacket.getAddress());
+                    parent.setSendingPort(receivedDatagramPacket.getPort());
                     System.out.println("Accepted by server, sending ack...");
                     break;
                 case Packet.CONNECTION_RESPONSE_BUSY:
                     System.out.println("Refused by server, shutting down...");
+                    break;
+                case Packet.DISCOVER_HOSTS_REQUEST:
+                    sent = PacketFactory.createFindHostsResponsePacket().toBytes();
+                    sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
+                    parent.getSocket().send(sentDatagramPacket);
+                    break;
+                case Packet.DISCOVER_HOSTS_RESPONSE:
+                    System.out.println("Host found at " + receivedDatagramPacket.getAddress() + ":" + receivedDatagramPacket.getPort());
                     break;
             }
 
@@ -94,8 +118,8 @@ public class ReceivingThread extends Thread {
             if (!hasConnection) {
                 switch (receivedPacket.getType()) {
                     case Packet.CONNECTION_START:
-                        byte[] sent = PacketFactory.createServerAcceptedPacket().toBytes();
-                        sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), parent.getSendingPort());
+                        sent = PacketFactory.createServerAcceptedPacket().toBytes();
+                        sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
                         parent.getSocket().send(sentDatagramPacket);
                         System.out.println("Received connection from " + receivedDatagramPacket.getAddress().toString());
                         break;
@@ -103,14 +127,15 @@ public class ReceivingThread extends Thread {
                     case Packet.CONNECTION_ACKNOWLEDGE_RESPONSE:
                         hasConnection = true;
                         parent.setCurrentConnection(receivedDatagramPacket.getAddress());
+                        parent.setSendingPort(receivedDatagramPacket.getPort());
                         System.out.println("Connection acknowledged by " + receivedDatagramPacket.getAddress().toString());
                         break;
                 }
             } else {
                 switch (receivedPacket.getType()) {
                     case Packet.CONNECTION_START:
-                        byte[] sent = PacketFactory.createServerBusyPacket().toBytes();
-                        sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), parent.getSendingPort());
+                        sent = PacketFactory.createServerBusyPacket().toBytes();
+                        sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
                         parent.getSocket().send(sentDatagramPacket);
                         System.out.println("Connection attempt from " + receivedDatagramPacket.getAddress().toString() + ", dropping");
                         break;
@@ -118,10 +143,28 @@ public class ReceivingThread extends Thread {
                     case Packet.UNFRAGMENTED_MESSAGE:
                         System.out.println("Received: " + new String(receivedPacket.getData()));
                         break;
+                    case Packet.TRANSFER_START:
+                        ByteBuffer byteBuffer = ByteBuffer.wrap(receivedPacket.getData());
+                        byte type = byteBuffer.get();
+                        packetStorage = new PacketStorage(receivedPacket.getId(), type, byteBuffer.getInt());
+                        System.out.println("Transfer started, type: " + type);
+                        break;
                     case Packet.FILE:
                         if (packetStorage.isListening()) {
                             try {
                                 packetStorage.addPacket(receivedPacket);
+                                this.notifyPacketStorage();
+                            } catch (PacketStorage.NotOperatingException | PacketStorage.IncorrectTypeException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        break;
+
+                    case Packet.FRAGMENTED_MESSAGE:
+                        if (packetStorage.isListening()) {
+                            try {
+                                packetStorage.addPacket(receivedPacket);
+                                this.notifyPacketStorage();
                             } catch (PacketStorage.NotOperatingException | PacketStorage.IncorrectTypeException e) {
                                 e.printStackTrace();
                             }

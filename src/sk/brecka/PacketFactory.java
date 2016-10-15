@@ -79,27 +79,14 @@ public class PacketFactory {
         return packets;
     }
 
+    public static Packet createFindHostsRequestPacket() {
+        return new Packet(generatePacketId(), Packet.DISCOVER_HOSTS_REQUEST, new byte[0]);
+    }
+    public static Packet createFindHostsResponsePacket() {
+        return new Packet(generatePacketId(), Packet.DISCOVER_HOSTS_RESPONSE, new byte[0]);
+    }
 
-//        for (int i = 0; i < (fileBytes.length + filenameBytes.length) / packetLength + 1; i++) {
-//            // urci dlzku packetu
-//            int length;
-//            if ((i + 1) * packetLength < fileBytes.length) {
-//                length = packetLength;
-//            } else {
-//                length = fileBytes.length - i * packetLength;
-//            }
-//            byte[] byteFragment = Arrays.copyOfRange(fileBytes, i * packetLength, i * packetLength + length);
-//            Packet packet = new Packet();
-//            packet.setId(generatePacketId());
-//            packet.setType(Packet.FILE);
-//            packet.setData(byteFragment);
-//
-//            packets.add(packet);
-//        }
-//        return packets;
-//}
-
-    public static Packet createMessagePacket(String message) {
+    public static Packet createMessagePacket(String message) {ł
         return new Packet(generatePacketId(), Packet.UNFRAGMENTED_MESSAGE, message.getBytes());
     }
 
@@ -115,12 +102,12 @@ public class PacketFactory {
         return new Packet(generatePacketId(), Packet.CONNECTION_RESPONSE_BUSY, new byte[0]);
     }
 
-    public static Packet createServerAcceptedPacket(){
+    public static Packet createServerAcceptedPacket() {
         return new Packet(generatePacketId(), Packet.CONNECTION_RESPONSE_ACCEPTED, new byte[0]);
     }
 
-    public static Packet createClientConnectPacket(){
-        return new Packet(generatePacketId(),Packet.CONNECTION_START,new byte[0]);
+    public static Packet createClientConnectPacket() {
+        return new Packet(generatePacketId(), Packet.CONNECTION_START, new byte[0]);
     }
 
 //    public static Packet createFileTransferStartPacket(byte messageType, int messageByteLength) {
@@ -131,8 +118,8 @@ public class PacketFactory {
 //        return new Packet(generatePacketId(), Packet.TRANSFER_FILE_START, data);
 //    }
 
-    public static Packet createClientAcknowledgedConnection(){
-        return new Packet(generatePacketId(),Packet.CONNECTION_ACKNOWLEDGE_RESPONSE,new byte[0]);
+    public static Packet createClientAcknowledgedConnection() {
+        return new Packet(generatePacketId(), Packet.CONNECTION_ACKNOWLEDGE_RESPONSE, new byte[0]);
     }
 
     public static Packet createPositiveResponsePacket(int id) {

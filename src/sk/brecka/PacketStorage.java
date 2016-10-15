@@ -77,9 +77,9 @@ public class PacketStorage {
                 val = 0;
             }
             byt = (byte) ((byt << 1) | val);
-            if ((i+1) % 8 == 0) {
+            if ((i + 1) % 8 == 0) {
                 byteBuffer.put(byt);
-                byt=0;
+                byt = 0;
             }
         }
         return byteBuffer.array();
@@ -95,8 +95,7 @@ public class PacketStorage {
         return new String(byteBuffer.array());
     }
 
-    public void buildFile() throws FileNotFoundException, IOException {
-        System.out.println("File being built...");
+    public void buildFile() throws IOException {
         Collections.sort(packetList, comparator);
 
         ByteBuffer fileBuffer = ByteBuffer.allocate(listenedForGoalLength);
@@ -115,10 +114,16 @@ public class PacketStorage {
         }
 
         String path = new String(filename);
-        FileOutputStream fos = new FileOutputStream(path);
-        fos.write(fileBuffer.array());
+        System.out.println("Building " + filename + "...");
+        FileOutputStream fos = new FileOutputStream("downloads/" + path);
+        byte[] bar = new byte[foo.remaining()];
+        foo.get(bar);
+        fos.write(bar);
+//        for (byte b : fileBuffer.array()) {
+//            System.out.print(b + " ");
+//        }
         fos.close();
-        System.out.println("File received.");
+        System.out.println(filename + " built");
     }
 
     public boolean isFull() {

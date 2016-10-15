@@ -18,9 +18,8 @@ public class Foo {
 
     ReceivingThread receivingThread;
 
-    public Foo(int receivingPort, int sendingPort) throws IOException {
+    public Foo(int receivingPort) throws IOException {
         this.receivingPort = receivingPort;
-        this.sendingPort = sendingPort;
         this.socket = new DatagramSocket(receivingPort);
         this.currentConnection = null;
     }

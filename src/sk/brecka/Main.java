@@ -11,6 +11,8 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Main {
     public static final int TIMEOUT_PERIOD_TOTAL = 2000;
@@ -224,13 +226,13 @@ public class Main {
         }
     }
 
-    private static void initFoo(int receivingPort, int sendingPort, boolean isStartingAsClient) throws IOException {
-        foo = new Foo(receivingPort, sendingPort);
-        if (isStartingAsClient) {
-            System.out.println("Connect to IP");
-            scannedLine = scanner.nextLine();
-            foo.setCurrentConnection(InetAddress.getByName(scannedLine));
-        }
+    private static void initFoo(int receivingPort, int sendingPort) throws IOException {
+        foo = new Foo(receivingPort);
+//        if (isStartingAsClient) {
+//            System.out.println("Connect to IP");
+//            scannedLine = scanner.nextLine();
+//            foo.setCurrentConnection(InetAddress.getByName(scannedLine));
+//        }
 //
         ReceivingThread receivingThread = new ReceivingThread(foo);
         foo.setReceivingThread(receivingThread);
@@ -243,22 +245,61 @@ public class Main {
 
         int packetLength = 2000;
         System.out.println("Send message:");
-        while (true) {
+        boolean isRunning = true;
+        while (isRunning) {
             scannedLine = scanner.nextLine();
-            String[] input = scannedLine.split(" ");
+            int spaceIndex = scannedLine.indexOf(' ');
+            String[] input = scannedLine.split(" ", 2);
+
             switch (input[0].toUpperCase()) {
                 case "C":
                     buf = PacketFactory.createClientConnectPacket().toBytes();
-                    socket.send(new DatagramPacket(buf, buf.length, foo.getCurrentConnection(), foo.getSendingPort()));
+                    String[] inetAddress = input[1].split(" ", 2);
+                    socket.send(new DatagramPacket(buf, buf.length, InetAddress.getByName(inetAddress[0]), Integer.parseInt(inetAddress[1])));
                     break;
                 case "M":
-                    buf = PacketFactory.createMessagePacket(scannedLine).toBytes();
-                    socket.send(new DatagramPacket(buf, buf.length, foo.getCurrentConnection(), foo.getSendingPort()));
+                    List<Packet> packets = PacketFactory.createMessagePackets(input[1], 200);
+                    for (Packet p : packets) {
+                        buf = p.toBytes();
+                        socket.send(new DatagramPacket(buf, buf.length, foo.getCurrentConnection(), foo.getSendingPort()));
+                    }
                     break;
                 case "F":
+                    List<Packet> filePackets = PacketFactory.createFilePackets(Paths.get(input[1]), 200);
+                    for (Packet p : filePackets) {
+                        buf = p.toBytes();
+                        socket.send(new DatagramPacket(buf, buf.length, foo.getCurrentConnection(), foo.getSendingPort()));
+                    }
+                    break;
+                case "H":
+                    buf = PacketFactory.createFindHostsRequestPacket().toBytes();
+//                    socket.send(new DatagramPacket(buf, buf.length, InetAddress.getByName("255.255.255.255"), Integer.parseInt(input[1])));
+                    inetAddress = input[1].split(" ", 2);
+                    // zavola broadcast pre podsiet
+                    socket.send(new DatagramPacket(buf, buf.length, InetAddress.getByName(inetAddress[0]), Integer.parseInt(inetAddress[1])));
+                    break;
+                case "HL":
+                    buf = PacketFactory.createFindHostsRequestPacket().toBytes();
+
+                    String address = InetAddress.getLocalHost().getHostAddress();
+                    Pattern pattern = Pattern.compile("(.*\\.)");
+                    Matcher matcher = pattern.matcher(address);
+
+                    if (matcher.find()) {
+                        socket.send(new DatagramPacket(buf, buf.length, InetAddress.getByName(matcher.group().concat("255")), Integer.parseInt(input[1])));
+                    } else {
+                        System.out.println("Chyba ale nemalo by sa to stat");
+                    }
+                    break;
+                case "Q":
+                    System.out.println("Quitting...");
+                    System.exit(0);
+                    break;
+                case "I":
+                    System.out.println("Your IP address is " + InetAddress.getLocalHost().getHostAddress());
                     break;
                 default:
-                    System.out.println("Incorrect input. C to connect, M to message, F to file");
+                    System.out.println("Incorrect input. C to connect, M to message, F to file, H to discover hosts, Q to quit");
                     break;
             }
         }
@@ -312,13 +353,9 @@ public class Main {
         int receivingPort, sendingPort;
         scanner = new Scanner(System.in);
 
-        System.out.println("Start as client? y/n");
+        System.out.println("Receive on port:");
         scannedLine = scanner.nextLine();
-        if (scannedLine.equalsIgnoreCase("y")) {
-            initFoo(4444, 4445, true);
-        } else if (scannedLine.equalsIgnoreCase("n")) {
-            initFoo(4445, 4444, false);
-        }
+        initFoo(Integer.parseInt(scannedLine), 0);
 
 //        boolean[] booleans = {true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false,true,false};
 //boolean[] booleans = {false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true};
