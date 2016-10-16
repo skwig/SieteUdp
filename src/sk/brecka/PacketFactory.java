@@ -19,12 +19,8 @@ public class PacketFactory {
     static int packetId = 0;
 
     public static List<Packet> createMessagePackets(String message, int packetLength) {
-        if (packetLength > message.length()) {
-            return Arrays.asList(PacketFactory.createMessagePacket(message));
-        } else {
-
             List<Packet> packets = new ArrayList<>();
-            packets.add(PacketFactory.createTransferStartPacket(Packet.FRAGMENTED_MESSAGE, message.getBytes().length));
+            packets.add(PacketFactory.createTransferStartPacket(Packet.MESSAGE, message.getBytes().length));
             for (int i = 0; i < message.length() / packetLength + 1; i++) {
                 // urci dlzku packetu
                 int length;
@@ -37,13 +33,13 @@ public class PacketFactory {
                 String messageFragment = message.substring(i * packetLength, i * packetLength + length);
                 Packet packet = new Packet();
                 packet.setId(generatePacketId());
-                packet.setType(Packet.FRAGMENTED_MESSAGE);
+                packet.setType(Packet.MESSAGE);
                 packet.setData(messageFragment.getBytes());
 
                 packets.add(packet);
             }
             return packets;
-        }
+
     }
 
     public static List<Packet> createFilePackets(Path path, int packetLength) throws IOException {
@@ -86,9 +82,6 @@ public class PacketFactory {
         return new Packet(generatePacketId(), Packet.DISCOVER_HOSTS_RESPONSE, new byte[0]);
     }
 
-    public static Packet createMessagePacket(String message) {
-        return new Packet(generatePacketId(), Packet.UNFRAGMENTED_MESSAGE, message.getBytes());
-    }
 
     public static Packet createTransferStartPacket(byte messageType, int messageByteLength) {
         byte[] data = ByteBuffer.allocate(Packet.ID_LENGTH + Packet.TYPE_LENGTH)
@@ -124,6 +117,10 @@ public class PacketFactory {
 
     public static Packet createPositiveResponsePacket(int id) {
         return new Packet(generatePacketId(), Packet.RESPONSE_POSITIVE, ByteBuffer.allocate(Packet.ID_LENGTH).putInt(id).array());
+    }
+
+    public static Packet createKeepAlivePacket(){
+        return new Packet(generatePacketId(),Packet.KEEP_ALIVE,new byte[0]);
     }
 
     @Deprecated

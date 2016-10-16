@@ -51,40 +51,6 @@ public class PacketStorage {
         return max;
     }
 
-    public void buildAck() {
-        boolean[] data = new boolean[getMax() - startId];
-        Arrays.fill(data, false);
-
-        for (Packet p : packetList) {
-            data[p.getId() - startId] = true;
-        }
-    }
-
-    public static byte[] booleanArrayToByteArray(boolean[] booleanArray) {
-        byte byt = 0;
-
-
-        int outSize = (int) Math.ceil(booleanArray.length / 8);
-        int val;
-
-        ByteBuffer byteBuffer = ByteBuffer.allocate(outSize);
-
-
-        for (int i = 0; i < booleanArray.length; i++) {
-            if (booleanArray[i]) {
-                val = 1;
-            } else {
-                val = 0;
-            }
-            byt = (byte) ((byt << 1) | val);
-            if ((i + 1) % 8 == 0) {
-                byteBuffer.put(byt);
-                byt = 0;
-            }
-        }
-        return byteBuffer.array();
-    }
-
     public String buildMessage() {
         Collections.sort(packetList, comparator);
         ByteBuffer byteBuffer = ByteBuffer.allocate(listenedForGoalLength);

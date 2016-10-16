@@ -1,6 +1,6 @@
 package sk.brecka.thread;
 
-import sk.brecka.Foo;
+import sk.brecka.Client;
 import sk.brecka.PacketFactory;
 import sk.brecka.PacketStorage;
 import sk.brecka.model.Packet;
@@ -16,9 +16,7 @@ import java.util.Arrays;
  * Created by Matej on 13.10.2016.
  */
 public class ReceivingThread extends Thread {
-    public static final int TIMEOUT_PERIOD = 2000;
-    public static final int MAXIMUM_RETRY_COUNT = 5;
-    Foo parent;
+    Client parent;
 
     int retryCount = 0;
     byte[] byteArray;
@@ -29,7 +27,7 @@ public class ReceivingThread extends Thread {
 
     PacketStorage packetStorage;
 
-    public ReceivingThread(Foo parent) throws IOException {
+    public ReceivingThread(Client parent) throws IOException {
         this.parent = parent;
         init();
     }
@@ -45,6 +43,7 @@ public class ReceivingThread extends Thread {
     public synchronized void start() {
         super.start();
         System.out.println(this.getClass().getSimpleName() + " # start");
+//        parent.getKeepAliveThread().start();
     }
 
     @Override
@@ -61,6 +60,7 @@ public class ReceivingThread extends Thread {
     public void notifyTimeout() throws IOException {
         System.out.println("Connection timed out from " + parent.getCurrentConnection() + ", dropping");
         parent.setCurrentConnection(null);
+        parent.getKeepAliveThread().interrupt();
         hasConnection = false;
     }
 
@@ -70,7 +70,7 @@ public class ReceivingThread extends Thread {
                 case Packet.FILE:
                     packetStorage.buildFile();
                     break;
-                case Packet.FRAGMENTED_MESSAGE:
+                case Packet.MESSAGE:
                     System.out.println((packetStorage.buildMessage()));
                     break;
             }
@@ -79,17 +79,19 @@ public class ReceivingThread extends Thread {
 
     private void sendAck(Packet p) throws IOException {
         byte[] buf = PacketFactory.createPositiveResponsePacket(p.getId()).toBytes();
-        parent.getSocket().send(new DatagramPacket(buf, buf.length, parent.getCurrentConnection(), parent.getSendingPort()));
+        parent.getSocket().sendNotifying(new DatagramPacket(buf, buf.length, parent.getCurrentConnection(), parent.getSendingPort()),true);
 //        System.out.println("Sending ack");
     }
 
     private void doThread() throws IOException {
         try {
             parent.getSocket().receive(receivedDatagramPacket);
+
             retryCount = 0;
-//            if (parent.getSocket().getSoTimeout() == 0) {
-//                parent.getSocket().setSoTimeout(TIMEOUT_PERIOD);
-//            }
+            // timeoutovanie
+            if (parent.getSocket().getSoTimeout() == 0) {
+                parent.getSocket().setSoTimeout(Client.TIMEOUT_PERIOD);
+            }
 
             Packet receivedPacket;
             Packet sentPacket;
@@ -101,7 +103,7 @@ public class ReceivingThread extends Thread {
                 case Packet.CONNECTION_RESPONSE_ACCEPTED:
                     sent = PacketFactory.createClientAcknowledgedConnection().toBytes();
                     sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
-                    parent.getSocket().send(sentDatagramPacket);
+                    parent.getSocket().sendNotifying(sentDatagramPacket,false);
                     hasConnection = true;
                     parent.setCurrentConnection(receivedDatagramPacket.getAddress());
                     parent.setSendingPort(receivedDatagramPacket.getPort());
@@ -113,7 +115,7 @@ public class ReceivingThread extends Thread {
                 case Packet.DISCOVER_HOSTS_REQUEST:
                     sent = PacketFactory.createFindHostsResponsePacket().toBytes();
                     sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
-                    parent.getSocket().send(sentDatagramPacket);
+                    parent.getSocket().sendNotifying(sentDatagramPacket,false);
                     break;
                 case Packet.DISCOVER_HOSTS_RESPONSE:
                     System.out.println("Host found at " + receivedDatagramPacket.getAddress() + ":" + receivedDatagramPacket.getPort());
@@ -126,7 +128,7 @@ public class ReceivingThread extends Thread {
                     case Packet.CONNECTION_START:
                         sent = PacketFactory.createServerAcceptedPacket().toBytes();
                         sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
-                        parent.getSocket().send(sentDatagramPacket);
+                        parent.getSocket().sendNotifying(sentDatagramPacket,false);
                         System.out.println("Received connection from " + receivedDatagramPacket.getAddress().toString());
                         break;
 
@@ -142,13 +144,10 @@ public class ReceivingThread extends Thread {
                     case Packet.CONNECTION_START:
                         sent = PacketFactory.createServerBusyPacket().toBytes();
                         sentDatagramPacket = new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort());
-                        parent.getSocket().send(sentDatagramPacket);
+                        parent.getSocket().sendNotifying(sentDatagramPacket,true);
                         System.out.println("Connection attempt from " + receivedDatagramPacket.getAddress().toString() + ", dropping");
                         break;
 
-                    case Packet.UNFRAGMENTED_MESSAGE:
-                        System.out.println("Received: " + new String(receivedPacket.getData()));
-                        break;
                     case Packet.TRANSFER_START:
                         ByteBuffer byteBuffer = ByteBuffer.wrap(receivedPacket.getData());
                         byte type = byteBuffer.get();
@@ -156,21 +155,6 @@ public class ReceivingThread extends Thread {
 
                         sendAck(receivedPacket);
                         System.out.println("Transfer started, type: " + type);
-                        break;
-                    case Packet.FILE:
-                        if (packetStorage.isListening()) {
-                            try {
-//                                sent = PacketFactory.createPositiveResponsePacket(receivedPacket.getId()).toBytes();
-                                if (!packetStorage.contains(receivedPacket.getId())) {
-                                    packetStorage.addPacket(receivedPacket);
-                                    this.notifyPacketStorage();
-//                                parent.getSocket().send(new DatagramPacket(sent, sent.length, receivedDatagramPacket.getAddress(), receivedDatagramPacket.getPort()));
-                                }
-                            } catch (PacketStorage.NotOperatingException | PacketStorage.IncorrectTypeException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                        sendAck(receivedPacket);
                         break;
                     case Packet.RESPONSE_POSITIVE:
 //                        System.out.println("Got positive response");
@@ -182,21 +166,28 @@ public class ReceivingThread extends Thread {
                         }
                         break;
 
-                    case Packet.FRAGMENTED_MESSAGE:
+                    case Packet.FILE:
+                    case Packet.MESSAGE:
                         if (packetStorage.isListening()) {
                             try {
-                                packetStorage.addPacket(receivedPacket);
-                                this.notifyPacketStorage();
+                                if (!packetStorage.contains(receivedPacket.getId())) {
+                                    packetStorage.addPacket(receivedPacket);
+                                    this.notifyPacketStorage();
+                                }
                             } catch (PacketStorage.NotOperatingException | PacketStorage.IncorrectTypeException e) {
                                 e.printStackTrace();
                             }
                         }
+                        sendAck(receivedPacket);
+                        break;
+
+                    case Packet.KEEP_ALIVE:
                         break;
                 }
             }
         } catch (SocketTimeoutException e) {
-            System.out.println("No response");
-            if (++retryCount > MAXIMUM_RETRY_COUNT) {
+//            System.out.println("No response");
+            if (++retryCount > Client.MAXIMUM_RETRY_COUNT) {
                 notifyTimeout();
                 if (parent.getSocket().getSoTimeout() != 0) {
                     parent.getSocket().setSoTimeout(0);
